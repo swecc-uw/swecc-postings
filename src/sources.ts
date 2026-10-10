@@ -50,13 +50,15 @@ export const SOURCES: Source[] = [
 
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 const strs = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+const isHttpsUrl = (s: string): boolean => s.startsWith("https://");
 
 export function parseListing(raw: unknown): Listing | null {
   if (typeof raw !== "object" || raw === null) return null;
   const r = raw as Record<string, unknown>;
   const id = str(r.id);
   const url = str(r.url);
-  if (!id || !url || typeof r.date_posted !== "number" || !Number.isFinite(r.date_posted)) return null;
+  if (!id || !url || !isHttpsUrl(url) || typeof r.date_posted !== "number" || !Number.isFinite(r.date_posted))
+    return null;
   return {
     id,
     company: str(r.company_name),

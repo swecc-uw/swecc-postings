@@ -31,8 +31,14 @@ describe("parseListing", () => {
   });
 
   it("tolerates missing optional fields", () => {
-    const l = parseListing({ id: "x", url: "u", date_posted: 5 });
+    const l = parseListing({ id: "x", url: "https://u.com", date_posted: 5 });
     expect(l).toMatchObject({ locations: [], terms: [], active: false, visible: false, company: "" });
+  });
+
+  it("rejects non-https URLs", () => {
+    expect(parseListing({ id: "x", url: "http://u.com", date_posted: 5 })).toBeNull();
+    expect(parseListing({ id: "x", url: "ftp://u.com", date_posted: 5 })).toBeNull();
+    expect(parseListing({ id: "x", url: "u", date_posted: 5 })).toBeNull();
   });
 });
 

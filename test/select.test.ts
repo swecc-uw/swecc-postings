@@ -19,7 +19,8 @@ describe("selectNew", () => {
     const r = selectNew([recent("a", 100), recent("c", 10), recent("b", 50)], source, prev, now);
     expect(r.fresh.map((l) => l.id)).toEqual(["b", "c"]);
     expect(r.deferred).toBe(false);
-    expect(r.seen).toEqual({ a: now - 100, b: now - 50, c: now - 10 });
+    // Fresh listings are not added to seen by selectNew; run.ts adds them incrementally after posting
+    expect(r.seen).toEqual({ a: now - 100 });
   });
 
   it("prunes seen entries older than the window", () => {
@@ -40,8 +41,8 @@ describe("selectNew", () => {
     const listings = Array.from({ length: MAX_POSTS_PER_SOURCE + 2 }, (_, i) => recent(`id${i}`, 1000 - i));
     const r = selectNew(listings, source, prev, now);
     expect(r.fresh).toHaveLength(MAX_POSTS_PER_SOURCE);
-    expect(Object.keys(r.seen)).toHaveLength(MAX_POSTS_PER_SOURCE);
-    expect(r.seen).not.toHaveProperty(`id${MAX_POSTS_PER_SOURCE + 1}`);
+    // Fresh listings are not added to seen by selectNew; run.ts adds them incrementally after posting
+    expect(Object.keys(r.seen)).toHaveLength(0);
     expect(r.deferred).toBe(true);
   });
 });

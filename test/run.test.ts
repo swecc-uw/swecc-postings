@@ -139,4 +139,60 @@ describe("run", () => {
     expect(state["simplify-internships"]!.etag).toBe('"v1"');
     expect(Object.keys(state["simplify-internships"]!.seen)).toHaveLength(30);
   });
+
+  it("records posted listings as seen even when a later batch fails with 502 (bug 1)", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const prev = {
+      "simplify-internships": { etag: '"v1"', seen: {} },
+      "simplify-new-grad": { etag: '"v1"', seen: {} },
+    };
+    const ids = Array.from({ length: 25 }, (_, n) => `id${n}`);
+    let postCount = 0;
+    stubFetch({
+      [internships!.url]: () => file(...ids),
+      [newGrad!.url]: unchanged,
+      [internHook]: () => {
+        postCount++;
+        if (postCount === 2) return new Response("Bad Gateway", { status: 502 });
+        return accepted();
+      },
+    });
+    const { state, errors } = await run(webhooks, prev, now);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toBeInstanceOf(Error);
+    expect((errors[0] as Error).message).toContain("502");
+    // The first batch of 10 should still be recorded as seen
+    expect(Object.keys(state["simplify-internships"]!.seen)).toHaveLength(10);
+    for (let i = 0; i < 10; i++) {
+      expect(state["simplify-internships"]!.seen[`id${i}`]).toBe(now - 60);
+    }
+    // The second batch (ids 10-19) and third batch (ids 20-24) should NOT be seen
+    expect(state["simplify-internships"]!.seen).not.toHaveProperty("id10");
+  });
+
+  it("skips batches that fail with 4xx errors and continues posting (bug 2)", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const prev = {
+      "simplify-internships": { etag: '"v1"', seen: {} },
+      "simplify-new-grad": { etag: '"v1"', seen: {} },
+    };
+    const ids = Array.from({ length: 25 }, (_, n) => `id${n}`);
+    let postCount = 0;
+    stubFetch({
+      [internships!.url]: () => file(...ids),
+      [newGrad!.url]: unchanged,
+      [internHook]: () => {
+        postCount++;
+        if (postCount === 2) return new Response("Bad Request", { status: 400 });
+        return accepted();
+      },
+    });
+    const { state, errors } = await run(webhooks, prev, now);
+    // 4xx errors are treated as "skip this batch" not "fail the whole source"
+    expect(errors).toHaveLength(0);
+    // Batches 1 and 3 succeeded (20 listings), batch 2 was skipped but still marked as seen
+    expect(Object.keys(state["simplify-internships"]!.seen)).toHaveLength(25);
+  });
 });

@@ -1,4 +1,4 @@
-import { buildPayloads, postPayload } from "./discord.ts";
+import { buildPayloads, postPayload, DiscordClientError } from "./discord.ts";
 import { selectNew } from "./select.ts";
 import { SOURCES, parseListing, type Listing, type Source, type State, type WebhookVar } from "./sources.ts";
 
@@ -24,17 +24,44 @@ export async function run(
   const errors: unknown[] = [];
 
   for (const source of SOURCES) {
+    const before = prev[source.id];
+    let postedCount = 0;
+    let skippedCount = 0;
+    let sourceError: unknown = null;
+
     try {
       const webhookUrl = webhooks[source.webhook];
       if (!webhookUrl) throw new Error(`${source.webhook} is not set`);
-      const before = prev[source.id];
       const result = await fetchListings(source, before?.etag);
       if (!result) continue;
       const { fresh, seen, deferred } = selectNew(result.listings, source, before, now);
-      for (const payload of buildPayloads(fresh, source)) await postPayload(webhookUrl, payload);
-      console.log(`${source.id}: posted ${fresh.length}${before ? "" : " (seed run)"}`);
-      // Keeping the old etag forces a refetch next run, so listings held back by the cap are not stuck behind a 304.
-      state[source.id] = { etag: deferred ? (before?.etag ?? "") : result.etag, seen };
+
+      const batches = buildPayloads(fresh, source);
+      for (const { payload, listings } of batches) {
+        try {
+          await postPayload(webhookUrl, payload);
+          for (const l of listings) seen[l.id] = l.datePosted;
+          postedCount += listings.length;
+        } catch (err) {
+          if (err instanceof DiscordClientError) {
+            console.warn(`${source.id}: skipping batch due to client error:`, err.message);
+            for (const l of listings) seen[l.id] = l.datePosted;
+            skippedCount += listings.length;
+          } else {
+            sourceError = err;
+            break;
+          }
+        }
+      }
+
+      const seedRun = !before;
+      const etag = deferred ? (before?.etag ?? "") : result.etag;
+      state[source.id] = { etag, seen };
+
+      if (sourceError) throw sourceError;
+
+      const skippedMsg = skippedCount > 0 ? `, ${skippedCount} skipped` : "";
+      console.log(`${source.id}: posted ${postedCount}${skippedMsg}${seedRun ? " (seed run)" : ""}`);
     } catch (err) {
       console.error(`${source.id} failed:`, err);
       errors.push(err);
