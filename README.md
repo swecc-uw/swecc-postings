@@ -1,4 +1,4 @@
-# job-postings-channel
+# swecc-postings
 
 A scheduled GitHub Actions job that checks the SimplifyJobs listing files on GitHub and posts newly added software internship (2027 terms) and new grad listings to Discord. Internships and new grad roles each go to their own channel webhook.
 
