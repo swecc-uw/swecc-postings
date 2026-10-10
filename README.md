@@ -68,3 +68,12 @@ Run `npm test` for the unit tests and `npx tsc --noEmit` for type checking.
 - To change which categories count as software, edit `SOFTWARE_CATEGORIES` at the top of `src/sources.ts`.
 - To change the internship term year, edit `INTERNSHIP_TERM_YEAR` in the same file.
 - The window and per-run cap are `WINDOW_SECONDS` and `MAX_POSTS_PER_RUN` in `src/select.ts`.
+
+## Branch protection
+
+Two repository rulesets guard the branches.
+
+- `main` only changes through a pull request with one approving review. Force pushes and deletion are blocked, and nobody is exempt.
+- `state` can only be pushed by a deploy key. The workflow holds the private half in the `STATE_DEPLOY_KEY` secret and uses it for the state checkout. GitHub does not allow the built-in Actions token on a ruleset's bypass list, which is why a deploy key is used. The job's own token is read-only.
+
+To rotate the key, generate a new pair with `ssh-keygen -t ed25519`, add the public half under Settings, Deploy keys with write access, set the private half as the `STATE_DEPLOY_KEY` secret, and delete the old deploy key.
