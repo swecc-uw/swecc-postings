@@ -31,7 +31,7 @@ jobs:
         with:
           node-version: 24
 
-      - run: node src/main.ts .state/state.json
+      - run: node src/main.ts .state/state.bin
         env:
           DISCORD_WEBHOOK_INTERNSHIPS: ${{ secrets.DISCORD_WEBHOOK_INTERNSHIPS }}
           DISCORD_WEBHOOK_NEW_GRAD: ${{ secrets.DISCORD_WEBHOOK_NEW_GRAD }}
@@ -40,7 +40,7 @@ jobs:
         if: always()
         working-directory: .state
         run: |
-          git add state.json
+          git add state.bin
           git diff --cached --quiet && exit 0
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Update state"
           git push -q

@@ -15,7 +15,15 @@ A scheduled GitHub Actions job that checks the SimplifyJobs listing files on Git
 
 `.github/workflows/post-listings.yml` runs at :08 and :38 of every hour, a few minutes after upstream's half-hourly update. GitHub can delay scheduled runs when it is busy.
 
-State is one file, `state.json`, on a separate `state` branch. Each run checks that branch out, runs `node src/main.ts .state/state.json`, and commits the file back if it changed. Keeping it off `main` keeps the history readable.
+State is one file, `state.bin`, on a separate `state` branch. Each run checks that branch out, runs `node src/main.ts .state/state.bin`, and commits the file back if it changed. Keeping it off `main` keeps the history readable.
+
+`state.bin` is a compact binary file: 20 bytes per posted listing, plus each source's id and etag. The layout is documented at the top of `src/state.ts`. To read it as JSON:
+
+```
+git fetch origin state
+git show origin/state:state.bin > state.bin
+npm run state:dump state.bin
+```
 
 To run it by hand, open the Actions tab, pick "Post new listings", and press "Run workflow". A manual run does exactly what a scheduled run does, including posting to Discord.
 
@@ -25,8 +33,8 @@ To run it by hand, open the Actions tab, pick "Post new listings", and press "Ru
 
    ```
    git switch --orphan state
-   echo "{}" > state.json
-   git add state.json
+   printf "\001\000" > state.bin
+   git add state.bin
    git commit -m "Start with empty state"
    git push -u origin state
    git switch main
@@ -39,7 +47,7 @@ To run it by hand, open the Actions tab, pick "Post new listings", and press "Ru
    gh secret set DISCORD_WEBHOOK_NEW_GRAD
    ```
 
-To start over, replace `state.json` on the `state` branch with `{}`. The next run seeds silently.
+To start over, delete `state.bin` on the `state` branch. The next run seeds silently.
 
 ## Local run
 
@@ -50,7 +58,7 @@ npm install
 npm start
 ```
 
-This keeps its own `state.json` in the project folder, separate from the `state` branch. Pointing it at the real webhooks while the workflow is live posts every listing twice.
+This keeps its own `state.bin` in the project folder, separate from the `state` branch. Pointing it at the real webhooks while the workflow is live posts every listing twice.
 
 Run `npm test` for the unit tests and `npx tsc --noEmit` for type checking.
 
