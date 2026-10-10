@@ -27,9 +27,51 @@ export type SourceState = { etag: string; seen: Record<string, number> };
 export type State = Record<string, SourceState>;
 
 export const SOFTWARE_CATEGORIES = new Set(["Software", "Software Engineering"]);
+export const AI_ML_DATA_CATEGORIES = new Set(["AI/ML/Data", "Data Science, AI & Machine Learning"]);
 export const INTERNSHIP_TERM_YEAR = "2027";
 
-const isSoftware = (l: Listing) => SOFTWARE_CATEGORIES.has(l.category) && l.active && l.visible;
+const ML_TITLE_ALLOW = [
+  /machine\s*learning/i,
+  /\bml\b/i,
+  /\bai\b/i,
+  /data\s*scien/i,
+  /research/i,
+  /applied\s*scientist/i,
+  /computer\s*vision/i,
+  /\bcv\b/i,
+  /\bnlp\b/i,
+  /natural\s*language/i,
+  /\bllm\b/i,
+  /large\s*language/i,
+  /deep\s*learning/i,
+  /data\s*engineer/i,
+  /neural/i,
+  /autonom/i,
+  /robotics/i,
+  /perception/i,
+];
+
+const ML_TITLE_BLOCK = [
+  /annotator/i,
+  /annotation/i,
+  /help\s*improve\s*ai/i,
+  /marketing/i,
+  /people\s*analytics/i,
+  /\bhr\b.*(?:analytics|data|ai)/i,
+  /(?:analytics|data|ai).*\bhr\b/i,
+  /talent\s*acquisition/i,
+  /business\s*(?:admin|intelligence)/i,
+  /strategic\s*insight/i,
+];
+
+export function isMLTitle(title: string): boolean {
+  if (ML_TITLE_BLOCK.some((re) => re.test(title))) return false;
+  return ML_TITLE_ALLOW.some((re) => re.test(title));
+}
+
+const isActive = (l: Listing) => l.active && l.visible;
+const isSoftware = (l: Listing) => SOFTWARE_CATEGORIES.has(l.category) && isActive(l);
+const isAIMLData = (l: Listing) => AI_ML_DATA_CATEGORIES.has(l.category) && isActive(l) && isMLTitle(l.title);
 
 export const SOURCES: Source[] = [
   {
@@ -37,14 +79,14 @@ export const SOURCES: Source[] = [
     webhook: "DISCORD_WEBHOOK_INTERNSHIPS",
     url: "https://raw.githubusercontent.com/SimplifyJobs/Summer2027-Internships/dev/.github/scripts/listings.json",
     color: 0x5865f2,
-    matches: (l) => isSoftware(l) && l.terms.some((t) => t.includes(INTERNSHIP_TERM_YEAR)),
+    matches: (l) => (isSoftware(l) || isAIMLData(l)) && l.terms.some((t) => t.includes(INTERNSHIP_TERM_YEAR)),
   },
   {
     id: "simplify-new-grad",
     webhook: "DISCORD_WEBHOOK_NEW_GRAD",
     url: "https://raw.githubusercontent.com/SimplifyJobs/New-Grad-Positions/dev/.github/scripts/listings.json",
     color: 0x57f287,
-    matches: isSoftware,
+    matches: (l) => isSoftware(l) || isAIMLData(l),
   },
 ];
 
