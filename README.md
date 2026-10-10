@@ -7,7 +7,7 @@
 > - [SimplifyJobs/Summer2027-Internships](https://github.com/SimplifyJobs/Summer2027-Internships)
 > - [SimplifyJobs/New-Grad-Positions](https://github.com/SimplifyJobs/New-Grad-Positions)
 
-A scheduled GitHub Actions job that checks the SimplifyJobs listing files on GitHub and posts newly added software internship (2027 terms) and new grad listings to Discord. Internships and new grad roles each go to their own channel webhook.
+A GitHub Actions job, triggered on a schedule by Upstash QStash, that checks the SimplifyJobs listing files on GitHub and posts newly added software internship (2027 terms) and new grad listings to Discord. Internships and new grad roles each go to their own channel webhook.
 
 ## How it decides what is new
 
@@ -20,7 +20,12 @@ A scheduled GitHub Actions job that checks the SimplifyJobs listing files on Git
 
 ## How it runs
 
-`.github/workflows/post-listings.yml` runs at :08 and :38 of every hour, a few minutes after upstream's half-hourly update. GitHub can delay scheduled runs when it is busy.
+`.github/workflows/post-listings.yml` runs at :08 and :38 of every hour (UTC), a few minutes after upstream's half-hourly update. Two triggers fire on that schedule:
+
+- An [Upstash QStash](https://upstash.com/docs/qstash) schedule named `swecc-postings-dispatch` calls GitHub's `workflow_dispatch` API. This is the trigger that runs on time.
+- The workflow's own `schedule` cron is the fallback. GitHub can delay scheduled runs by hours when it is busy, which is why QStash was added.
+
+Both triggers share one concurrency group, so overlapping runs queue instead of racing. A run that finds nothing new posts nothing.
 
 State is one file, `state.bin`, on a separate `state` branch. Each run checks that branch out, runs `node src/main.ts .state/state.bin`, and commits the file back if it changed. Keeping it off `main` keeps the history readable.
 
@@ -53,6 +58,23 @@ To run it by hand, open the Actions tab, pick "Post new listings", and press "Ru
    gh secret set DISCORD_WEBHOOK_INTERNSHIPS
    gh secret set DISCORD_WEBHOOK_NEW_GRAD
    ```
+
+3. Create the QStash schedule. It needs a fine-grained GitHub token limited to this repository with the Actions permission set to read and write. With that token in `GITHUB_PAT` and your QStash token in `QSTASH_TOKEN`:
+
+   ```
+   curl -X POST "https://qstash-us-east-1.upstash.io/v2/schedules/https://api.github.com/repos/swecc-uw/swecc-postings/actions/workflows/post-listings.yml/dispatches" \
+     -H "Authorization: Bearer $QSTASH_TOKEN" \
+     -H "Content-Type: application/json" \
+     -H "Upstash-Cron: 8,38 * * * *" \
+     -H "Upstash-Schedule-Id: swecc-postings-dispatch" \
+     -H "Upstash-Retries: 3" \
+     -H "Upstash-Forward-Authorization: Bearer $GITHUB_PAT" \
+     -H "Upstash-Forward-Accept: application/vnd.github+json" \
+     -H "Upstash-Forward-X-GitHub-Api-Version: 2022-11-28" \
+     -d '{"ref":"main"}'
+   ```
+
+   Running it again with the same schedule id overwrites the schedule, which is also how to rotate the GitHub token. QStash stores the token as a readable header on the schedule, so anyone with access to the Upstash account can see it. If the token expires or is revoked, QStash deliveries fail with 401 and only the fallback cron keeps running.
 
 To start over, delete `state.bin` on the `state` branch. The next run seeds silently.
 
