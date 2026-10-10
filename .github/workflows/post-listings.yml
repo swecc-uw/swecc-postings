@@ -1,0 +1,46 @@
+name: Post new listings
+
+on:
+  schedule:
+    # Upstream's bot commits at :01 to :03 and :31 to :32, and the raw file is cached for 5 minutes.
+    - cron: "8,38 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: post-listings
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+
+      # State lives on its own branch so main's history stays readable. The commits also count as
+      # repository activity, which keeps GitHub from disabling the schedule after 60 quiet days.
+      - uses: actions/checkout@v5
+        with:
+          ref: state
+          path: .state
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - run: node src/main.ts .state/state.json
+        env:
+          DISCORD_WEBHOOK_INTERNSHIPS: ${{ secrets.DISCORD_WEBHOOK_INTERNSHIPS }}
+          DISCORD_WEBHOOK_NEW_GRAD: ${{ secrets.DISCORD_WEBHOOK_NEW_GRAD }}
+
+      - name: Save state
+        if: always()
+        working-directory: .state
+        run: |
+          git add state.json
+          git diff --cached --quiet && exit 0
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Update state"
+          git push -q
