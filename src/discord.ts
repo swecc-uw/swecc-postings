@@ -49,6 +49,19 @@ export function truncateEntry(entry: string, maxLen: number): string | null {
   return `${linkLine}\n${truncatedDetails}`;
 }
 
+export function buildSinglePayload(listing: Listing, source: Source): WebhookPayload | null {
+  let entry = buildEntry(listing);
+  if (entry.length > MAX_DESCRIPTION) {
+    const truncated = truncateEntry(entry, MAX_DESCRIPTION);
+    if (!truncated) return null;
+    entry = truncated;
+  }
+  return {
+    embeds: [{ color: source.color, description: entry }],
+    allowed_mentions: { parse: [] },
+  };
+}
+
 // One embed holds the whole batch: Discord sizes each embed to its own content, so a stack of
 // per-listing embeds renders at ragged widths.
 export function buildPayloads(listings: Listing[], source: Source): PayloadBatch[] {

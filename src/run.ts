@@ -1,4 +1,4 @@
-import { buildPayloads, postPayload, DiscordClientError } from "./discord.ts";
+import { buildPayloads, buildSinglePayload, postPayload, DiscordClientError } from "./discord.ts";
 import { selectNew } from "./select.ts";
 import { SOURCES, parseListing, type Listing, type Source, type State, type WebhookVar } from "./sources.ts";
 
@@ -44,9 +44,30 @@ export async function run(
           postedCount += listings.length;
         } catch (err) {
           if (err instanceof DiscordClientError) {
-            console.warn(`${source.id}: skipping batch due to client error:`, err.message);
-            for (const l of listings) seen[l.id] = l.datePosted;
-            skippedCount += listings.length;
+            console.warn(`${source.id}: batch failed with ${err.status}, retrying individually`);
+            for (const listing of listings) {
+              const singlePayload = buildSinglePayload(listing, source);
+              if (!singlePayload) {
+                skippedCount++;
+                seen[listing.id] = listing.datePosted;
+                continue;
+              }
+              try {
+                await postPayload(webhookUrl, singlePayload);
+                seen[listing.id] = listing.datePosted;
+                postedCount++;
+              } catch (retryErr) {
+                if (retryErr instanceof DiscordClientError) {
+                  console.warn(`${source.id}: skipping listing ${listing.id} due to client error`);
+                  seen[listing.id] = listing.datePosted;
+                  skippedCount++;
+                } else {
+                  sourceError = retryErr;
+                  break;
+                }
+              }
+            }
+            if (sourceError) break;
           } else {
             sourceError = err;
             break;

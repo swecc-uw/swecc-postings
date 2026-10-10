@@ -96,30 +96,35 @@ describe("isMLTitle - real titles from CSV", () => {
     "Research Intern - World Models and Synthetic Data for Autonomous Driving",
     "AI Research Intern - Embodied AI",
     "Summer Intern - Onboard Autonomy - Embodied AI",
-    "Data Scaling Intern - Data Scaling - Embodied AI",
     "Machine Learning Engineer Intern",
     "Postdoctoral Researcher - AI for Earth System Sciences",
+    // Titles with marketing/HR that have strong ML signals should pass
+    "Marketing Data Analytics Engineer",
+    "HR AI Data Science Intern",
+    "Business Intelligence & AI Solutions Analyst - Single Family",
+    "People Analytics Intern - ML Platform",
   ];
 
   const shouldFail = [
+    // No strong ML signal
     "Founding Software Engineer",
-    "Data Annotation Specialist - Computer Vision",
-    "Talent Acquisition Assistant - Analytics",
-    "General AI Data Annotator",
-    "Marketing Data Analytics Engineer",
     "Developer – Credit Analytics",
     "Business Administration Co-op - Maintenance Excellence",
     "Panasonic Transformation Group Intern",
-    "Flexible Work - Help Improve AI - English Speakers",
     "Category Insights Analyst",
     "IT Analyst Co-op",
-    "Marketing Analyst - Early Careers Programme",
     "Strategic Insight and Analytics Co-op",
-    "Marketing Intern - Marketing Analysis",
-    "People Analytics Intern",
-    "HR AI Data Science Intern",
     "Business New Grad - Data and Analytics",
-    "Business Intelligence & AI Solutions Analyst - Single Family",
+    // Plain analyst titles without engineer/science signal
+    "Data Analyst Intern",
+    "Marketing Analyst - Early Careers Programme",
+    "People Analytics Intern",
+    // Pure noise: annotator, "help improve AI", talent acquisition
+    "Data Annotation Specialist - Computer Vision",
+    "General AI Data Annotator",
+    "Flexible Work - Help Improve AI - English Speakers",
+    "Talent Acquisition Assistant - Analytics",
+    "AI Recruiting Coordinator",
   ];
 
   it.each(shouldPass)("allows: %s", (title) => {

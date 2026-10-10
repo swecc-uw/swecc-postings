@@ -9,13 +9,13 @@ const internHook = "https://discord.test/api/webhooks/1/intern";
 const gradHook = "https://discord.test/api/webhooks/2/grad";
 const webhooks = { DISCORD_WEBHOOK_INTERNSHIPS: internHook, DISCORD_WEBHOOK_NEW_GRAD: gradHook };
 
-function stubFetch(handlers: Record<string, () => Response>) {
+function stubFetch(handlers: Record<string, (url: string, init?: RequestInit) => Response>) {
   const calls: { url: string; init?: RequestInit }[] = [];
   vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
     calls.push({ url, init });
     const handler = handlers[url.split("?")[0]!];
     if (!handler) throw new Error(`unexpected fetch ${url}`);
-    return handler();
+    return handler(url, init);
   });
   return calls;
 }
@@ -171,7 +171,7 @@ describe("run", () => {
     expect(state["simplify-internships"]!.seen).not.toHaveProperty("id10");
   });
 
-  it("skips batches that fail with 4xx errors and continues posting (bug 2)", async () => {
+  it("retries batch individually on 4xx and posts good listings (bug 2)", async () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
     vi.spyOn(console, "warn").mockImplementation(() => {});
     const prev = {
@@ -185,14 +185,55 @@ describe("run", () => {
       [newGrad!.url]: unchanged,
       [internHook]: () => {
         postCount++;
+        // Batch 2 (posts 2) fails, triggering individual retries (posts 3-12)
+        // Then batch 3 succeeds (post 13)
         if (postCount === 2) return new Response("Bad Request", { status: 400 });
         return accepted();
       },
     });
     const { state, errors } = await run(webhooks, prev, now);
-    // 4xx errors are treated as "skip this batch" not "fail the whole source"
     expect(errors).toHaveLength(0);
-    // Batches 1 and 3 succeeded (20 listings), batch 2 was skipped but still marked as seen
+    // All 25 listings should be marked as seen (batch 1: 10, batch 2 retried individually: 10, batch 3: 5)
     expect(Object.keys(state["simplify-internships"]!.seen)).toHaveLength(25);
+    // Should have made 13 POST calls: batch1, batch2 (failed), 10 individual retries, batch3
+    expect(postCount).toBe(13);
+  });
+
+  it("skips only the bad listing when retrying individually on 4xx", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const prev = {
+      "simplify-internships": { etag: '"v1"', seen: {} },
+      "simplify-new-grad": { etag: '"v1"', seen: {} },
+    };
+    const ids = ["good1", "good2", "bad", "good3", "good4"];
+    const postedIds: string[] = [];
+    stubFetch({
+      [internships!.url]: () => file(...ids),
+      [newGrad!.url]: unchanged,
+      [internHook]: (_, init) => {
+        const body = JSON.parse((init as RequestInit).body as string);
+        const desc = body.embeds[0].description as string;
+        // Batch post fails
+        if (desc.includes("good1") && desc.includes("bad")) {
+          return new Response("Bad Request", { status: 400 });
+        }
+        // Individual retry of "bad" listing fails
+        if (desc.includes("example.com/bad") && !desc.includes("good")) {
+          return new Response("Bad Request", { status: 400 });
+        }
+        // Track which listings were successfully posted
+        for (const id of ids) {
+          if (desc.includes(`example.com/${id}`)) postedIds.push(id);
+        }
+        return accepted();
+      },
+    });
+    const { state, errors } = await run(webhooks, prev, now);
+    expect(errors).toHaveLength(0);
+    // All 5 should be marked as seen (including "bad" which was skipped)
+    expect(Object.keys(state["simplify-internships"]!.seen)).toHaveLength(5);
+    // But only good1, good2, good3, good4 should have been successfully posted
+    expect(postedIds.sort()).toEqual(["good1", "good2", "good3", "good4"]);
   });
 });
