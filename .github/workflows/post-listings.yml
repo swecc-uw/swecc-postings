@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: post-listings
@@ -22,10 +22,13 @@ jobs:
 
       # State lives on its own branch so main's history stays readable. The commits also count as
       # repository activity, which keeps GitHub from disabling the schedule after 60 quiet days.
+      # A ruleset lets only deploy keys push to that branch, and GitHub does not allow the built-in
+      # Actions token on a ruleset's bypass list, so this checkout pushes with a deploy key.
       - uses: actions/checkout@v5
         with:
           ref: state
           path: .state
+          ssh-key: ${{ secrets.STATE_DEPLOY_KEY }}
 
       - uses: actions/setup-node@v5
         with:
