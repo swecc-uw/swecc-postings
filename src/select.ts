@@ -26,6 +26,5 @@ export function selectNew(
 
   const unseen = candidates.filter((l) => !(l.id in seen));
   const fresh = unseen.slice(0, MAX_POSTS_PER_SOURCE);
-  for (const l of fresh) seen[l.id] = l.datePosted;
   return { fresh, seen, deferred: fresh.length < unseen.length };
 }
