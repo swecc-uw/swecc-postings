@@ -1,4 +1,4 @@
-# job-postings-channel
+# swecc-postings
 
 > ## Credit: all listings come from [Simplify](https://simplify.jobs)
 >
